@@ -1,0 +1,1 @@
+from .index import redirects_row_data

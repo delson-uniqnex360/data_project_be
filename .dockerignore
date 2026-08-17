@@ -1,0 +1,85 @@
+# Core Git & System Junk
+.git
+.gitignore
+.gitattributes
+.github
+.gitlab
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Python Artifacts & Caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing, Coverage & Quality Assurance
+.cache
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+.nox/
+.tox/
+htmlcov/
+.coverage
+.coverage.*
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# Local Environment Variables & Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+
+# Local Logs & Databases
+*.log
+*.sqlite
+*.sqlite3
+
+# Docker & Deployment Configurations
+Dockerfile
+Dockerfile.*
+docker-compose*.yml
+.dockerignore
+
+# Documentation & Development Assets
+README.md
+docs/
+*.md
