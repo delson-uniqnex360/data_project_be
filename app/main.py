@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
             browser.driver = None
 
 
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

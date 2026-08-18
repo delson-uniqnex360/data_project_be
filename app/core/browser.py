@@ -71,3 +71,28 @@ def execute_script(script: str, *args):
 def get(*args, **kwargs):
     """Executes JavaScript in the current browser window/frame."""
     return get_driver().get(*args, **kwargs)
+
+
+def wait_for_element(*args, **kwargs):
+    return get_driver().wait_for_element(*args, **kwargs)
+
+
+def press_keys(*args, **kwargs):
+    return get_driver().press_keys(*args, **kwargs)
+
+
+def wait_for_element_present(*args, **kwargs):
+    return get_driver().wait_for_element_present(*args, **kwargs)
+
+
+def wait_for_page_load(*args, **kwargs):
+    return get_driver().wait_for_page_load(*args, **kwargs)
+
+
+def wait_for_ready_state_complete(*args, **kwargs):
+    return get_driver().wait_for_ready_state_complete(*args, **kwargs)
+
+
+def is_element_present(*args, **kwargs):
+    return get_driver().is_element_present(*args, **kwargs)
+

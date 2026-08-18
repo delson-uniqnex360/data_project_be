@@ -5,6 +5,8 @@ from .home_depot import get_data_from_home_depot
 from .stens import get_data_from_stens
 from .trackter_supply import get_details_from_trackter_spply
 from .oregon import get_data_from_oregon
+from .makita import get_data_from_makita
+from .dewalt import get_data_from_dewalt
 
 
 async def redirects_row_data(row: dict, browser) -> List[Dict[str, Any]]:
@@ -17,14 +19,18 @@ async def redirects_row_data(row: dict, browser) -> List[Dict[str, Any]]:
         "Stens",
         # "Tractor Supply",
         "Oregon",
+        "Makita",
+        "DEWALT",
     }
 
     # Define list of target sites (deduplicated while preserving order)
     raw_websites = [
-        "Genuine Factory Parts",
-        "Home Depot",  # -> list to detail check
-        "Stens",
-        "Oregon",
+        # "Genuine Factory Parts",
+        # "Home Depot",  # -> list to detail check
+        # "Stens",
+        # "Oregon",
+        # "Makita",
+        "DEWALT",
     ]
     websites = list(dict.fromkeys(site for site in raw_websites if site))
 
@@ -44,6 +50,10 @@ async def redirects_row_data(row: dict, browser) -> List[Dict[str, Any]]:
             data = await get_data_from_genuine_factory_parts(oem, browser)
         elif site == "Oregon":
             data = get_data_from_oregon(oem, browser)
+        elif site == "Makita":
+            data = get_data_from_makita(oem, browser)
+        elif site == "DEWALT":
+            data = get_data_from_dewalt(oem, browser)
 
         # Attach site name if missing, then collect
         if isinstance(data, dict):

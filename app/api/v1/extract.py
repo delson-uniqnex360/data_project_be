@@ -1,3 +1,81 @@
+import re
+from collections import defaultdict
+
+# Matches keys like "feature_1", "Feature 1", "technology_2" -> prefix="feature"/"technology"
+_NUMBERED_KEY_RE = re.compile(r"^(?P<prefix>.*?)[\s_]*(?P<num>\d+)$")
+
+
+def normalize_key(key: str) -> str:
+    """Standardize a column name so equivalent keys from different
+    sources collapse to the same field, e.g. "SKU" / "sku" and
+    "Attribute 1" / "Attribute_1" are treated as identical.
+    """
+    key = (key or "").strip()
+    key = re.sub(r"[\s_]+", " ", key)
+    return key.lower()
+
+
+def numbered_key_prefix(normalized_key: str):
+    """Return the prefix of a numbered key (e.g. "feature 1" -> "feature"),
+    or None if the key isn't numbered.
+    """
+    match = _NUMBERED_KEY_RE.match(normalized_key)
+    if not match:
+        return None
+    prefix = match.group("prefix").strip()
+    return prefix or None
+
+
+def merge_sku_items(items: list[dict]) -> dict:
+    """Merge multiple per-SKU dicts into a single row.
+
+    - Keys are standardized (case/spacing/underscore insensitive) so
+      duplicate columns from different sources don't get split apart.
+    - Numbered attributes (feature_1, technology_2, includes_3, ...) are
+      NEVER merged into one cell. Every numbered value across all items
+      is collected and renumbered sequentially (feature_1, feature_2, ...)
+      so nothing gets overwritten or concatenated together.
+    - All other fields are deduped (case-insensitive) and joined with
+      ", " when values differ.
+    """
+    plain_values = defaultdict(list)
+    numbered_values = defaultdict(list)
+    display_keys = {}
+
+    for item in items:
+        for raw_key, raw_value in item.items():
+            if raw_value is None or str(raw_value).strip() == "":
+                continue
+
+            value = str(raw_value).strip()
+            normalized = normalize_key(raw_key)
+            prefix = numbered_key_prefix(normalized)
+
+            if prefix:
+                numbered_values[prefix].append(value)
+            else:
+                display_keys.setdefault(normalized, raw_key)
+                plain_values[normalized].append(value)
+
+    merged = {}
+
+    for normalized, values in plain_values.items():
+        seen = set()
+        deduped = []
+        for v in values:
+            v_lower = v.lower()
+            if v_lower not in seen:
+                seen.add(v_lower)
+                deduped.append(v)
+        merged[display_keys[normalized]] = ", ".join(deduped)
+
+    for prefix, values in numbered_values.items():
+        for i, value in enumerate(values, start=1):
+            merged[f"{prefix}_{i}"] = value
+
+    return merged
+
+
 from collections import defaultdict
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -65,52 +143,30 @@ async def extract_excel_file(
 
         print("raw results", raw_results)
         # -------------------------------------------------------------
-        # Group by SKU & Merge into a single row per SKU
+        # Group by SKU & merge each SKU's items into a single row.
+        # Key names are standardized (case/spacing/underscore) and
+        # numbered attributes (feature_1, technology_2, ...) are
+        # dynamically renumbered instead of being joined into one cell.
+        # See app/helpers/sku_merge.py.
         # -------------------------------------------------------------
         grouped_by_sku = defaultdict(list)
         for item in raw_results:
             sku = item.get("SKU")
             grouped_by_sku[sku].append(item)
 
-        # Gather ALL unique keys across EVERY item, globally,
-        # so every output row has the exact same set of columns.
+        normalized_results = [
+            merge_sku_items(items) for items in grouped_by_sku.values()
+        ]
+
+        # Union of all columns across every row, preserving first-seen
+        # order, so every output row has the exact same set of columns.
         all_keys = list(
-            dict.fromkeys(key for item in raw_results for key in item.keys())
+            dict.fromkeys(key for row in normalized_results for key in row.keys())
         )
 
-        normalized_results = []
-
-        for sku, items in grouped_by_sku.items():
-            merged_dict = {}
-
-            for key in all_keys:
-                # Collect all non-None, non-empty values for this key
-                # across this SKU's items, trimming whitespace so that
-                # values differing only in stray spaces are still
-                # recognized as duplicates.
-                values = [
-                    str(item[key]).strip()
-                    for item in items
-                    if item.get(key) is not None and str(item[key]).strip() != ""
-                ]
-
-                if not values:
-                    merged_dict[key] = None
-                else:
-                    # Dedupe case-insensitively while preserving the
-                    # first-seen casing and order, then join any
-                    # remaining distinct values with a comma.
-                    seen_lower = set()
-                    deduped_values = []
-                    for v in values:
-                        v_lower = v.lower()
-                        if v_lower not in seen_lower:
-                            seen_lower.add(v_lower)
-                            deduped_values.append(v)
-
-                    merged_dict[key] = ", ".join(deduped_values)
-
-            normalized_results.append(merged_dict)
+        normalized_results = [
+            {key: row.get(key) for key in all_keys} for row in normalized_results
+        ]
 
         print("results", normalized_results)
 
