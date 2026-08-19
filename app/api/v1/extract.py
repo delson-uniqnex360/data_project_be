@@ -1,5 +1,6 @@
 import re
 from collections import defaultdict
+from app.helpers.extract_data.helpers import dedupe_by_similarity
 
 # Matches keys like "feature_1", "Feature 1", "technology_2" -> prefix="feature"/"technology"
 _NUMBERED_KEY_RE = re.compile(r"^(?P<prefix>.*?)[\s_]*(?P<num>\d+)$")
@@ -70,8 +71,12 @@ def merge_sku_items(items: list[dict]) -> dict:
         merged[display_keys[normalized]] = ", ".join(deduped)
 
     for prefix, values in numbered_values.items():
-        for i, value in enumerate(values, start=1):
-            merged[f"{prefix}_{i}"] = value
+        deduped_values = dedupe_by_similarity(
+            values
+        )  # e.g. ["Waterproof", "Bluetooth 5.0"]
+        for i, value in enumerate(deduped_values, start=1):
+            merged[f"{prefix}_{i}"] = value  # merged["feature_1"] = "Waterproof"
+            # merged["feature_2"] = "Bluetooth 5.0"
 
     return merged
 

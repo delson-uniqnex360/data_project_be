@@ -1,172 +1,244 @@
-import asyncio
 import re
-from playwright.async_api import async_playwright
-
-# Import the Stealth class (works in playwright-stealth >= 2.0)
-from playwright_stealth import Stealth
+import time
+from seleniumbase import Driver
 
 
-async def get_details_from_trackter_spply(sku: str) -> dict | None:
+def get_details_from_trackter_spply(sku: str, driver: Driver) -> dict | None:
     search_url = f"https://www.tractorsupply.com/tsc/search/{sku}?isIntSrch=written"
+    print("search url", search_url)
 
-    # Instantiate Stealth object
-    stealth = Stealth()
+    try:
+        print(f"Searching for SKU: {sku}...")
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            headless=True,
-            args=[
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-blink-features=AutomationControlled",
-                "--disable-http2",
-                "--disable-infobars",
-                "--window-size=1920,1080",
-            ],
-        )
+        # Use uc_open_with_reconnect without calling driver.get afterwards
+        if hasattr(driver, "uc_open_with_reconnect"):
+            driver.uc_open_with_reconnect(search_url, reconnect_time=4)
+        else:
+            driver.get(search_url)
 
-        context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-            viewport={"width": 1920, "height": 1080},
-            device_scale_factor=1,
-            has_touch=False,
-            is_mobile=False,
-            locale="en-US",
-            timezone_id="America/New_York",
-        )
+        # Pause briefly to allow initial scripts/hydration to kick off
+        time.sleep(3)
 
-        # Apply stealth to the context in v2.x
-        await stealth.apply_stealth_async(context)
+        # Check for WAF/Access Denied blocks directly
+        status_code = getattr(driver, "status_code", None)
+        page_title = driver.get_title()
+        page_source = driver.get_page_source()
 
-        page = await context.new_page()
+        if (
+            status_code in [403, 429]
+            or "Access Denied" in page_title
+            or "px-captcha" in page_source
+        ):
+            print(f"Blocked by WAF with status code {status_code or 'Forbidden'}")
+            return None
 
+        # --- Check for Direct Redirect to a Product Page ---
+        current_url = driver.get_current_url()
+        product_urls = []
+
+        if "/tsc/product/" in current_url or "/product/" in current_url:
+            print("Directly redirected to product page.")
+            product_urls = [current_url]
+        else:
+            # Trigger page scroll to activate lazy-loading React components
+            driver.execute_script("window.scrollTo(0, 400);")
+            time.sleep(1)
+
+            # Explicitly wait for React to hydrate and render product cards
+            try:
+                driver.wait_for_element_present(
+                    ".new-product-card-v2, [data-testid*='product'], a[href*='/tsc/product/'], a[href*='/product/'], #no-results-found",
+                    timeout=15,
+                )
+            except Exception:
+                print("Timeout waiting for product cards to render in DOM.")
+
+            # Extract links using JavaScript execution to safely reach dynamic DOM nodes
+            product_urls = driver.execute_script("""
+                const links = Array.from(document.querySelectorAll('a[href*="/tsc/product/"], a[href*="/product/"]'));
+                const urls = links.map(a => {
+                    let href = a.getAttribute('href');
+                    if (!href) return null;
+                    return href.startsWith('/') ? 'https://www.tractorsupply.com' + href : href;
+                }).filter(Boolean);
+                return Array.from(new Set(urls));
+                """)
+
+            # Fallback DOM element lookup
+            if not product_urls:
+                anchor_elements = driver.find_elements(
+                    "css selector", 'a[href*="/tsc/product/"], a[href*="/product/"]'
+                )
+                product_urls = []
+                for anchor in anchor_elements:
+                    href = anchor.get_attribute("href")
+                    if href:
+                        full_url = (
+                            f"https://www.tractorsupply.com{href}"
+                            if href.startswith("/")
+                            else href
+                        )
+                        if full_url not in product_urls:
+                            product_urls.append(full_url)
+
+        if not product_urls:
+            print(f"No product detail URLs found on the page for SKU: {sku}")
+            return None
+
+        print(f"Found {len(product_urls)} candidate product URL(s) for SKU: {sku}")
+
+    except Exception as e:
+        print(f"Error fetching search page for SKU {sku}: {e}")
+        return None
+
+    # --- Candidate Page Validation (Matching Manufacturer Part Number) ---
+    matched_url = None
+
+    for target_url in product_urls:
         try:
-            print(f"Searching for SKU: {sku}...")
-            response = await page.goto(
-                search_url, wait_until="commit", timeout=30000
+            if driver.get_current_url() != target_url:
+                driver.get(target_url)
+
+            driver.wait_for_element("h1", timeout=10)
+
+            # Locate element containing "Manufacturer Part Number"
+            mfg_part_elements = driver.find_elements(
+                "xpath",
+                "//*[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'manufacturer part number')]",
             )
 
-            if response and response.status in [403, 429]:
-                print(f"Blocked by WAF with status code {response.status}")
-                await browser.close()
-                return None
+            if mfg_part_elements:
+                spec_text = driver.execute_script(
+                    "return arguments[0].closest('tr, li, div')?.innerText || arguments[0].parentElement.innerText;",
+                    mfg_part_elements[0],
+                )
 
-            await page.wait_for_selector(
-                ".new-product-card-v2, #no-results-found", timeout=15000
-            )
+                if spec_text and sku.lower() in spec_text.lower():
+                    matched_url = target_url
+                    break
+            elif len(product_urls) == 1:
+                # Direct redirect or single match default
+                matched_url = target_url
+                break
 
         except Exception as e:
-            print(f"Failed to load search page for SKU {sku}: {e}")
-            await browser.close()
-            return None
+            print(f"Error checking candidate URL {target_url}: {e}")
+            continue
 
-        # --- Product card matching logic ---
-        product_cards = page.locator(".new-product-card-v2")
-        card_count = await product_cards.count()
+    if not matched_url:
+        print(f"No exact Manufacturer Part Number match found for SKU {sku}")
+        return None
 
-        if card_count == 0:
-            print(f"No product cards found for SKU {sku}")
-            await browser.close()
-            return None
+    # --- Data Extraction Logic ---
+    data = {"product_url": matched_url}
 
-        product_urls = []
-        for i in range(card_count):
-            card = product_cards.nth(i)
-            link_element = card.locator('a[href*="/tsc/product/"]').first
-            if await link_element.count() > 0:
-                href = await link_element.get_attribute("href")
-                if href:
-                    full_url = (
-                        f"https://www.tractorsupply.com{href}"
-                        if href.startswith("/")
-                        else href
-                    )
-                    product_urls.append(full_url)
+    title_elements = driver.find_elements("css selector", 'h1[id="product title"]')
+    if title_elements:
+        data["Product Title"] = title_elements[0].text.strip()
+    else:
+        first_h1 = driver.find_elements("css selector", "h1")
+        data["Product Title"] = first_h1[0].text.strip() if first_h1 else ""
 
-        matched_url = None
+    price_elements = driver.find_elements(
+        "css selector",
+        "span:has(sup.decimal-price-subscription), [data-testid*='price']",
+    )
+    if price_elements:
+        raw_price = price_elements[0].text
+        data["price"] = re.sub(r"\s+", "", raw_price).strip()
 
-        for target_url in product_urls:
-            try:
+    # --- Dynamic Tab Content Extraction ---
+    tab_buttons = driver.find_elements(
+        "css selector", '[role="tab"], button[id*="tab-"], button[id*="simple-tab"]'
+    )
 
-                await page.goto(
-                    target_url, wait_until="commit", timeout=25000
-                )
-                await page.wait_for_selector("h1", timeout=10000)
-
-                mfg_part_locator = page.locator("text=/Manufacturer Part Number/i")
-                if await mfg_part_locator.count() > 0:
-                    spec_text = await mfg_part_locator.first.evaluate(
-                        "el => el.closest('tr, li, div')?.innerText || el.parentElement.innerText"
-                    )
-
-                    if sku.lower() in spec_text.lower():
-                        matched_url = target_url
-                        break
-            except Exception as e:
-                print(f"Error checking candidate URL {target_url}: {e}")
+    for tab in tab_buttons:
+        try:
+            tab_name = tab.text.strip()
+            if not tab_name or "Q&A" in tab_name:
                 continue
 
-        if not matched_url:
-            print(f"No exact Manufacturer Part Number match found for SKU {sku}")
-            await browser.close()
-            return None
+            # Safely trigger click event in case tab is partially off-screen
+            driver.execute_script("arguments[0].click();", tab)
+            time.sleep(0.4)
 
-        # --- Extraction logic ---
-        data = {"product_url": matched_url}
+            # Locate target panel by aria-controls attribute or active tabpanel
+            controls_id = tab.get_attribute("aria-controls")
+            if controls_id:
+                panels = driver.find_elements("id", controls_id)
+            else:
+                panels = driver.find_elements("css selector", '[role="tabpanel"]:not([hidden])')
 
-        title_locator = page.locator('h1[id="product title"]')
-        if await title_locator.count() > 0:
-            data["Product Title"] = (await title_locator.inner_text()).strip()
-        else:
-            data["Product Title"] = (await page.locator("h1").first.inner_text()).strip()
+            if not panels:
+                continue
 
-        price_locator = page.locator("span:has(sup.decimal-price-subscription)")
-        if await price_locator.count() > 0:
-            raw_price = await price_locator.first.inner_text()
-            data["price"] = re.sub(r"\s+", "", raw_price).strip()
+            panel = panels[0]
+            field_key = tab_name.lower().replace(" ", "_")
 
-        desc_panel = page.locator("#simple-tabpanel-0")
-        if await desc_panel.count() > 0:
-            paragraphs = desc_panel.locator("p")
-            p_texts = [
-                (await paragraphs.nth(p).inner_text()).strip()
-                for p in range(await paragraphs.count())
-            ]
-            if p_texts:
-                data["description"] = "\n\n".join([p for p in p_texts if p])
+            # Special parsing for Specifications key-value pairs
+            if "spec" in field_key:
+                spec_rows = panel.find_elements("css selector", "tr, div.MuiGrid-item, div.spec-row")
+                for row in spec_rows:
+                    cells = row.find_elements("css selector", "td, th, p, span")
+                    if len(cells) >= 2:
+                        k, v = cells[0].text.strip(), cells[1].text.strip()
+                        if k and v and k != v:
+                            data[k] = v
+            else:
+                # Capture text for Ingredients, Caloric Content, Feeding Guide, Product Details, etc.
+                text_content = panel.text.strip()
+                if text_content:
+                    data[field_key] = text_content
 
-            bullets = desc_panel.locator("ul li")
-            for idx in range(await bullets.count()):
-                bullet_text = (await bullets.nth(idx).inner_text()).strip()
-                if bullet_text:
-                    data[f"feature_{idx + 1}"] = bullet_text
+                # Also grab bullet points if present inside the active panel
+                bullets = panel.find_elements("css selector", "ul li")
+                if bullets:
+                    data[f"{field_key}_bullets"] = [b.text.strip() for b in bullets if b.text.strip()]
 
-        doc_panel = page.locator("#simple-tabpanel-1")
-        if await doc_panel.count() > 0:
-            doc_links = doc_panel.locator("a[href]")
-            for idx in range(await doc_links.count()):
-                link = doc_links.nth(idx)
-                title = (await link.inner_text()).strip()
-                href = await link.get_attribute("href")
+        except Exception as e:
+            print(f"Error processing tab '{tab.text}': {e}")
 
-                if href:
-                    data[f"document_title_{idx + 1}"] = title
-                    data[f"document_url_{idx + 1}"] = href
+    # desc_panels = driver.find_elements(
+    #     "css selector", "#simple-tabpanel-0, [id*='tabpanel-description']"
+    # )
+    # if desc_panels:
+    #     paragraphs = desc_panels[0].find_elements("css selector", "p")
+    #     p_texts = [p.text.strip() for p in paragraphs if p.text.strip()]
+    #     if p_texts:
+    #         data["description"] = "\n\n".join(p_texts)
 
-        spec_panel = page.locator("#simple-tabpanel-2")
-        if await spec_panel.count() > 0:
-            spec_rows = spec_panel.locator("tr, div.MuiGrid-item, div.spec-row")
-            for r in range(await spec_rows.count()):
-                row = spec_rows.nth(r)
-                cells = row.locator("td, th, p, span")
+    #     bullets = desc_panels[0].find_elements("css selector", "ul li")
+    #     for idx, bullet in enumerate(bullets, start=1):
+    #         bullet_text = bullet.text.strip()
+    #         if bullet_text:
+    #             data[f"feature_{idx}"] = bullet_text
 
-                if await cells.count() >= 2:
-                    key = (await cells.nth(0).inner_text()).strip()
-                    val = (await cells.nth(1).inner_text()).strip()
+    # doc_panels = driver.find_elements(
+    #     "css selector", "#simple-tabpanel-1, [id*='tabpanel-documents']"
+    # )
+    # if doc_panels:
+    #     doc_links = doc_panels[0].find_elements("css selector", "a[href]")
+    #     for idx, link in enumerate(doc_links, start=1):
+    #         title = link.text.strip()
+    #         href = link.get_attribute("href")
+    #         if href:
+    #             data[f"document_title_{idx}"] = title
+    #             data[f"document_url_{idx}"] = href
 
-                    if key and val and key != val:
-                        data[key] = val
+    # spec_panels = driver.find_elements(
+    #     "css selector", "#simple-tabpanel-2, [id*='tabpanel-specifications']"
+    # )
+    # if spec_panels:
+    #     spec_rows = spec_panels[0].find_elements(
+    #         "css selector", "tr, div.MuiGrid-item, div.spec-row"
+    #     )
+    #     for row in spec_rows:
+    #         cells = row.find_elements("css selector", "td, th, p, span")
+    #         if len(cells) >= 2:
+    #             key = cells[0].text.strip()
+    #             val = cells[1].text.strip()
+    #             if key and val and key != val:
+    #                 data[key] = val
 
-        await browser.close()
-        return data
+    return data
+

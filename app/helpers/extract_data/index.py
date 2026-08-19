@@ -17,7 +17,7 @@ async def redirects_row_data(row: dict, browser) -> List[Dict[str, Any]]:
         "Genuine Factory Parts",
         "Home Depot",
         "Stens",
-        # "Tractor Supply",
+        "Tractor Supply",
         "Oregon",
         "Makita",
         "DEWALT",
@@ -30,7 +30,8 @@ async def redirects_row_data(row: dict, browser) -> List[Dict[str, Any]]:
         # "Stens",
         # "Oregon",
         # "Makita",
-        "DEWALT",
+        # "DEWALT",
+        "Tractor Supply",
     ]
     websites = list(dict.fromkeys(site for site in raw_websites if site))
 
@@ -43,7 +44,7 @@ async def redirects_row_data(row: dict, browser) -> List[Dict[str, Any]]:
         if site == "Stens":
             data = await get_data_from_stens(oem)
         elif site == "Tractor Supply":
-            data = await get_details_from_trackter_spply(oem)
+            data =  get_details_from_trackter_spply(oem, browser)
         elif site == "Home Depot":
             data = await get_data_from_home_depot(oem, browser)
         elif site == "Genuine Factory Parts":
