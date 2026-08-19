@@ -12,7 +12,11 @@ from app.api.v1 import router as v1_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    browser.driver = Driver(uc=True)
+    browser.driver = Driver(
+        uc=True,
+        headless=True,
+        chromium_arg="--no-sandbox,--disable-dev-shm-usage,--disable-gpu",
+    )
 
     try:
         yield
