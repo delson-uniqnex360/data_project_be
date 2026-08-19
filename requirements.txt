@@ -19,6 +19,7 @@ bcrypt==4.1.2
 passlib[bcrypt]==1.7.4
 
 #file handling
+fastexcel==0.20.2
 polars==1.43.2
 openpyxl==3.1.5
 
