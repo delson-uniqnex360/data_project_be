@@ -25,10 +25,10 @@ async def redirects_row_data(row: dict, browser) -> List[Dict[str, Any]]:
 
     # Define list of target sites (deduplicated while preserving order)
     raw_websites = [
-        # "Genuine Factory Parts",
-        "Home Depot",  # -> list to detail check
-        # "Stens",
-        # "Oregon",
+        # "Genuine Factory Parts", #-> ok
+        # "Home Depot",  # -> list to detail check -> ok
+        # "Stens", #-> ok
+        "Oregon",
         # "Makita",
         # "DEWALT",
         # "Tractor Supply",
