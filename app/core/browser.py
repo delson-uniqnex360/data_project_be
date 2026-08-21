@@ -96,3 +96,6 @@ def wait_for_ready_state_complete(*args, **kwargs):
 def is_element_present(*args, **kwargs):
     return get_driver().is_element_present(*args, **kwargs)
 
+
+def save_screenshot(*args, **kwargs):
+    return get_driver().save_screenshot(*args, **kwargs)

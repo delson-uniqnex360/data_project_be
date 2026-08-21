@@ -171,3 +171,6 @@ Crawl-delay: 1
 Allow: /tsc/search/*?isItmUnpub=Y$
 Sitemap: https://www.tractorsupply.com/sitemap.xml
 
+
+docker cp data_project_be-api-1:/tmp/debug_K02754007.html ./debug_K02754007.html
+docker cp data_project_be-api-1:/tmp/debug_K02754007.png ./debug_K02754007.png

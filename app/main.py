@@ -9,12 +9,17 @@ from fastapi.middleware.cors import CORSMiddleware
 import app.core.browser as browser
 from app.api.v1 import router as v1_router
 
+# WEBSHARE_PROXY = "mrumywcp:mo6ncrvy5f61@p.webshare.io:80"
+
+WEBSHARE_PROXY = "mrumywcp:mo6ncrvy5f61@64.137.96.74:6641"
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     browser.driver = Driver(
         uc=True,
-        headless=True,
+        headless=False,  # NOT headless2 — run headed, let Xvfb provide the display
+        proxy=WEBSHARE_PROXY,
         chromium_arg="--no-sandbox,--disable-dev-shm-usage,--disable-gpu",
     )
 

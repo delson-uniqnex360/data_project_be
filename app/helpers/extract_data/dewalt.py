@@ -26,7 +26,7 @@ def open_dewalt_elements(driver: Driver):
 def extract_data_from_dewalt(soup: BeautifulSoup) -> dict:
     """Parses product page HTML into a clean dictionary."""
     data = {
-        "product_title": "",
+        "Product Title": "",
         "model_number": "",
         "description": "",
         "image_url": "",
@@ -37,7 +37,7 @@ def extract_data_from_dewalt(soup: BeautifulSoup) -> dict:
     # Title & Model
     h1 = soup.find("h1")
     if h1:
-        data["product_title"] = clean_text(h1.get_text())
+        data["Product Title"] = clean_text(h1.get_text())
 
     model = soup.select_one("[data-testid='product-label__code']")
     if model:
