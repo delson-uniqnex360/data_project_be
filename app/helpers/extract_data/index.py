@@ -37,26 +37,31 @@ async def redirects_row_data(row: dict, browser) -> List[Dict[str, Any]]:
 
     site_results = []
     for site in websites:
-        if site not in completed_brands:
-            site_results.append({"error": f"Dev Pending {site}"})
+        try:
+            if site not in completed_brands:
+                site_results.append({"error": f"Dev Pending {site}"})
 
-        data = None
-        if site == "Stens":
-            data = await get_data_from_stens(oem)
-        elif site == "Tractor Supply":
-            data =  get_details_from_trackter_spply(oem, browser)
-        elif site == "Home Depot":
-            data = await get_data_from_home_depot(oem, browser)
-        elif site == "Genuine Factory Parts":
-            data = await get_data_from_genuine_factory_parts(oem, browser)
-        elif site == "Oregon":
-            data = get_data_from_oregon(oem, browser)
-        elif site == "Makita":
-            data = get_data_from_makita(oem, browser)
-        elif site == "DEWALT":
-            data = get_data_from_dewalt(oem, browser)
+            data = None
+            if site == "Stens":
+                data = await get_data_from_stens(oem)
+            elif site == "Tractor Supply":
+                data =  get_details_from_trackter_spply(oem, browser)
+            elif site == "Home Depot":
+                data = await get_data_from_home_depot(oem, browser)
+            elif site == "Genuine Factory Parts":
+                data = await get_data_from_genuine_factory_parts(oem, browser)
+            elif site == "Oregon":
+                data = get_data_from_oregon(oem, browser)
+            elif site == "Makita":
+                data = get_data_from_makita(oem, browser)
+            elif site == "DEWALT":
+                data = get_data_from_dewalt(oem, browser)
 
-        # Attach site name if missing, then collect
-        if isinstance(data, dict):
-            site_results.append(data)
+            # Attach site name if missing, then collect
+            if isinstance(data, dict):
+                site_results.append(data)
+        except Exception as e:
+            print("error", e)
+            continue
+
     return site_results
