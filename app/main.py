@@ -12,19 +12,19 @@ from app.api.v1 import router as v1_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # browser.driver = Driver(
-    #     uc=True,
-    #     headless=True,
-    #     chromium_arg="--no-sandbox,--disable-dev-shm-usage,--disable-gpu",
-    # )
-
     browser.driver = Driver(
         uc=True,
-        headless2=True,
-        proxy="31.59.20.176:6754",  # no username:password needed now
-        block_images=True,
+        headless=True,
         chromium_arg="--no-sandbox,--disable-dev-shm-usage,--disable-gpu",
     )
+
+    # browser.driver = Driver(
+    #     uc=True,
+    #     headless2=True,
+    #     proxy="31.59.20.176:6754",  # no username:password needed now
+    #     block_images=True,
+    #     chromium_arg="--no-sandbox,--disable-dev-shm-usage,--disable-gpu",
+    # )
 
     try:
         yield
@@ -41,6 +41,9 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "https://data-project-fe.onrender.com/",
+        "https://data-project-fe.onrender.com",
+        "https://44.198.54.3.nip.io/",
+        "https://44.198.54.3.nip.io"
     ],
     allow_credentials=True,
     allow_methods=["*"],
