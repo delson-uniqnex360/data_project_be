@@ -28,8 +28,8 @@ async def redirects_row_data(row: dict, browser) -> List[Dict[str, Any]]:
         # "Genuine Factory Parts", #-> ok
         # "Home Depot",  # -> list to detail check -> ok
         # "Stens", #-> ok
-        "Oregon",
-        # "Makita",
+        #"Oregon", #-> Ok
+        "Makita",
         # "DEWALT",
         # "Tractor Supply",
     ]
