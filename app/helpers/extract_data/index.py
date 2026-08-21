@@ -29,8 +29,8 @@ async def redirects_row_data(row: dict, browser) -> List[Dict[str, Any]]:
         # "Home Depot",  # -> list to detail check -> ok
         # "Stens", #-> ok
         #"Oregon", #-> Ok
-        "Makita",
-        # "DEWALT",
+        #"Makita", #-> ok
+        "DEWALT",
         # "Tractor Supply",
     ]
     websites = list(dict.fromkeys(site for site in raw_websites if site))
