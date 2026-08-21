@@ -20,7 +20,7 @@ async def lifespan(app: FastAPI):
 
     browser.driver = Driver(
         uc=True,
-        headless=True,
+        headless2=True,
         proxy="31.59.20.176:6754",  # no username:password needed now
         block_images=True,
         chromium_arg="--no-sandbox,--disable-dev-shm-usage,--disable-gpu",
